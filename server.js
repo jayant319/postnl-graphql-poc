@@ -4,11 +4,12 @@ const { buildSchema } = require("graphql");
 const { createHandler } = require("graphql-http/lib/use/express");
 
 const app = express();
+
 const PORT = process.env.PORT || 3000;
 
-// --------------------------------------------------
+// ==================================================
 // CORS
-// --------------------------------------------------
+// ==================================================
 
 app.use(
   cors({
@@ -17,13 +18,16 @@ app.use(
       "http://localhost:3000"
     ],
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization"
+    ]
   })
 );
 
-// --------------------------------------------------
-// GraphQL Schema
-// --------------------------------------------------
+// ==================================================
+// GRAPHQL SCHEMA
+// ==================================================
 
 const schema = buildSchema(`
   type Address {
@@ -51,45 +55,28 @@ const schema = buildSchema(`
   }
 
   type Query {
-    validateAddress(input: AddressInput!): AddressValidation!
+    validateAddress(
+      input: AddressInput!
+    ): AddressValidation!
   }
 `);
 
-// --------------------------------------------------
-// GraphQL Resolver
-// --------------------------------------------------
+// ==================================================
+// GRAPHQL RESOLVER
+// ==================================================
 
 const root = {
+
   validateAddress: ({ input }) => {
 
-    console.log("Address received:", input);
+    console.log(
+      "Address received:",
+      input
+    );
 
-    // ------------------------------------------------
-    // TEMPORARY TEST
-    // Force GraphQL validation failure for:
-    // NL + 3011 AA
-    // ------------------------------------------------
-
-    if (
-      input.country === "NL" &&
-      input.postalCode.toUpperCase() === "3011 AA"
-    ) {
-
-      console.log(
-        "TEMP TEST: Returning GraphQL valid:false"
-      );
-
-      return {
-        valid: false,
-        message: "Address could not be verified.",
-        normalizedAddress: null
-      };
-    }
-
-    // ------------------------------------------------
-    // Netherlands postal-code validation
-    // Format: 1234 AB
-    // ------------------------------------------------
+    // ==================================================
+    // NETHERLANDS
+    // ==================================================
 
     if (input.country === "NL") {
 
@@ -121,10 +108,9 @@ const root = {
       };
     }
 
-    // ------------------------------------------------
-    // Belgium postal-code validation
-    // Format: 1234
-    // ------------------------------------------------
+    // ==================================================
+    // BELGIUM
+    // ==================================================
 
     if (input.country === "BE") {
 
@@ -156,9 +142,9 @@ const root = {
       };
     }
 
-    // ------------------------------------------------
-    // Unsupported country
-    // ------------------------------------------------
+    // ==================================================
+    // UNSUPPORTED COUNTRY
+    // ==================================================
 
     return {
       valid: false,
@@ -168,9 +154,9 @@ const root = {
   }
 };
 
-// --------------------------------------------------
-// GraphQL Endpoint
-// --------------------------------------------------
+// ==================================================
+// GRAPHQL ENDPOINT
+// ==================================================
 
 app.all(
   "/graphql",
@@ -180,23 +166,27 @@ app.all(
   })
 );
 
-// --------------------------------------------------
-// Health Check
-// --------------------------------------------------
+// ==================================================
+// HEALTH CHECK
+// ==================================================
 
 app.get("/", (req, res) => {
+
   res.json({
     status: "OK",
     service: "PostNL GraphQL POC"
   });
+
 });
 
-// --------------------------------------------------
-// Start Server
-// --------------------------------------------------
+// ==================================================
+// START SERVER
+// ==================================================
 
 app.listen(PORT, () => {
+
   console.log(
     `PostNL GraphQL POC running on port ${PORT}`
   );
+
 });
