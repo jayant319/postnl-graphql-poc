@@ -4,22 +4,35 @@ const { buildSchema } = require("graphql");
 const { createHandler } = require("graphql-http/lib/use/express");
 
 const app = express();
-
 const PORT = process.env.PORT || 3000;
 
-/* CORS */
+// --------------------------------------------------
+// CORS
+// --------------------------------------------------
+
 app.use(
   cors({
-    origin: "https://jayant-p-poc.oktademo.cloud",
-    methods: ["POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"]
+    origin: [
+      "https://jayant-p-poc.oktademo.cloud",
+      "http://localhost:3000"
+    ],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
   })
 );
 
-/* GraphQL Schema */
+// --------------------------------------------------
+// GraphQL Schema
+// --------------------------------------------------
+
 const schema = buildSchema(`
-  type Query {
-    validateAddress(input: AddressInput!): AddressValidationResult!
+  type Address {
+    street: String
+    houseNumber: String
+    houseNumberAddition: String
+    postalCode: String
+    city: String
+    country: String
   }
 
   input AddressInput {
@@ -31,105 +44,134 @@ const schema = buildSchema(`
     houseNumberAddition: String
   }
 
-  type AddressValidationResult {
+  type AddressValidation {
     valid: Boolean!
     message: String
-    normalizedAddress: NormalizedAddress
+    normalizedAddress: Address
   }
 
-  type NormalizedAddress {
-    street: String
-    houseNumber: String
-    houseNumberAddition: String
-    postalCode: String
-    city: String
-    country: String
+  type Query {
+    validateAddress(input: AddressInput!): AddressValidation!
   }
 `);
 
-/* Address Validation */
-function validateAddress({ input }) {
+// --------------------------------------------------
+// GraphQL Resolver
+// --------------------------------------------------
 
-  const {
-    country,
-    postalCode,
-    city,
-    street,
-    houseNumber,
-    houseNumberAddition
-  } = input;
+const root = {
+  validateAddress: ({ input }) => {
 
-  /* Required fields */
-  if (
-    !country ||
-    !postalCode ||
-    !city ||
-    !street ||
-    !houseNumber
-  ) {
+    console.log("Address received:", input);
+
+    // ------------------------------------------------
+    // TEMPORARY TEST
+    // Force GraphQL validation failure for:
+    // NL + 3011 AA
+    // ------------------------------------------------
+
+    if (
+      input.country === "NL" &&
+      input.postalCode.toUpperCase() === "3011 AA"
+    ) {
+
+      console.log(
+        "TEMP TEST: Returning GraphQL valid:false"
+      );
+
+      return {
+        valid: false,
+        message: "Address could not be verified.",
+        normalizedAddress: null
+      };
+    }
+
+    // ------------------------------------------------
+    // Netherlands postal-code validation
+    // Format: 1234 AB
+    // ------------------------------------------------
+
+    if (input.country === "NL") {
+
+      const nlPostalCode =
+        /^[1-9][0-9]{3}\s?[A-Za-z]{2}$/;
+
+      if (!nlPostalCode.test(input.postalCode)) {
+
+        return {
+          valid: false,
+          message: "Invalid Dutch postal code.",
+          normalizedAddress: null
+        };
+      }
+
+      return {
+        valid: true,
+        message: null,
+
+        normalizedAddress: {
+          street: input.street,
+          houseNumber: input.houseNumber,
+          houseNumberAddition:
+            input.houseNumberAddition || "",
+          postalCode: input.postalCode,
+          city: input.city,
+          country: input.country
+        }
+      };
+    }
+
+    // ------------------------------------------------
+    // Belgium postal-code validation
+    // Format: 1234
+    // ------------------------------------------------
+
+    if (input.country === "BE") {
+
+      const bePostalCode =
+        /^[1-9][0-9]{3}$/;
+
+      if (!bePostalCode.test(input.postalCode)) {
+
+        return {
+          valid: false,
+          message: "Invalid Belgian postal code.",
+          normalizedAddress: null
+        };
+      }
+
+      return {
+        valid: true,
+        message: null,
+
+        normalizedAddress: {
+          street: input.street,
+          houseNumber: input.houseNumber,
+          houseNumberAddition:
+            input.houseNumberAddition || "",
+          postalCode: input.postalCode,
+          city: input.city,
+          country: input.country
+        }
+      };
+    }
+
+    // ------------------------------------------------
+    // Unsupported country
+    // ------------------------------------------------
+
     return {
       valid: false,
-      message: "Required address information is missing.",
+      message: "Unsupported country.",
       normalizedAddress: null
     };
   }
-
-  /* Netherlands */
-  if (country === "NL") {
-
-    const nlPostalCode =
-      /^[1-9][0-9]{3}\s?[A-Za-z]{2}$/;
-
-    if (!nlPostalCode.test(postalCode)) {
-      return {
-        valid: false,
-        message: "Invalid Dutch postal code.",
-        normalizedAddress: null
-      };
-    }
-  }
-
-  /* Belgium */
-  if (country === "BE") {
-
-    const bePostalCode =
-      /^[1-9][0-9]{3}$/;
-
-    if (!bePostalCode.test(postalCode)) {
-      return {
-        valid: false,
-        message: "Invalid Belgian postal code.",
-        normalizedAddress: null
-      };
-    }
-  }
-
-  /* Mock successful validation */
-  return {
-    valid: true,
-    message: null,
-
-    normalizedAddress: {
-      street: street,
-      houseNumber: houseNumber,
-      houseNumberAddition:
-        houseNumberAddition || "",
-      postalCode:
-        postalCode
-          .toUpperCase()
-          .replace(/\s+/g, " "),
-      city: city,
-      country: country
-    }
-  };
-}
-
-/* Resolver */
-const root = {
-  validateAddress
 };
 
-/* GraphQL endpoint */
+// --------------------------------------------------
+// GraphQL Endpoint
+// --------------------------------------------------
+
 app.all(
   "/graphql",
   createHandler({
@@ -138,17 +180,23 @@ app.all(
   })
 );
 
-/* Health check */
+// --------------------------------------------------
+// Health Check
+// --------------------------------------------------
+
 app.get("/", (req, res) => {
   res.json({
-    status: "UP",
-    service: "PostNL GraphQL Address Validation POC"
+    status: "OK",
+    service: "PostNL GraphQL POC"
   });
 });
 
-/* Start server */
+// --------------------------------------------------
+// Start Server
+// --------------------------------------------------
+
 app.listen(PORT, () => {
   console.log(
-    `GraphQL server running on port ${PORT}`
+    `PostNL GraphQL POC running on port ${PORT}`
   );
 });
